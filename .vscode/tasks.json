@@ -1,0 +1,58 @@
+{
+  // Tasks supporting the "Run with Dev Tunnel" launch profile.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Bundle the widget + compile the server before launching.
+      "label": "build",
+      "type": "npm",
+      "script": "build",
+      "group": "build",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      // Host the PERSISTENT named dev tunnel "expense-mcp" so M365 Copilot can
+      // reach the local MCP server at a STABLE URL that survives restarts:
+      //   https://553wgbcg-3000.euw.devtunnels.ms/mcp
+      // The tunnel was created once with:
+      //   devtunnel create expense-mcp --allow-anonymous
+      //   devtunnel port create expense-mcp -p 3000
+      // Requires the devtunnel CLI (https://aka.ms/devtunnels/download) and a
+      // one-time `devtunnel user login`. Tunnels expire after 30 days of
+      // inactivity; re-run the two create commands if it lapses.
+      "label": "dev-tunnel",
+      "type": "shell",
+      "isBackground": true,
+      "command": "devtunnel",
+      "args": ["host", "expense-mcp"],
+      "presentation": {
+        "panel": "dedicated",
+        "group": "run-with-tunnel",
+        "reveal": "always"
+      },
+      "problemMatcher": {
+        // The tunnel never emits compiler-style diagnostics; this matcher only
+        // detects when hosting is ready so the launch can proceed.
+        "pattern": [
+          {
+            "regexp": "^(.*)$",
+            "file": 1,
+            "location": 1,
+            "message": 1
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*(Hosting port|Starting tunnel|Connecting to host).*",
+          "endsPattern": ".*Ready to accept connections.*"
+        }
+      }
+    },
+    {
+      // Build first, then bring up the tunnel; used as the launch preLaunchTask.
+      "label": "build-and-tunnel",
+      "dependsOrder": "sequence",
+      "dependsOn": ["build", "dev-tunnel"]
+    }
+  ]
+}

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Submit Expense</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #242424;
+    --muted: #616161;
+    --line: #e0e0e0;
+    --accent: #0f6cbd;
+    --accent-hover: #115ea3;
+    --ok-bg: #e7f4e9;
+    --ok-fg: #0e700e;
+    --radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1f1f1f; --fg: #f5f5f5; --muted: #adadad; --line: #3d3d3d;
+      --accent: #479ef5; --accent-hover: #62abf5; --ok-bg: #1d3023; --ok-fg: #6cc06c;
+    }
+  }
+  /* Explicit host theme override (set via the MCP host context) wins over the OS preference. */
+  :root[data-theme="light"] {
+    --bg: #ffffff; --fg: #242424; --muted: #616161; --line: #e0e0e0;
+    --accent: #0f6cbd; --accent-hover: #115ea3; --ok-bg: #e7f4e9; --ok-fg: #0e700e;
+  }
+  :root[data-theme="dark"] {
+    --bg: #1f1f1f; --fg: #f5f5f5; --muted: #adadad; --line: #3d3d3d;
+    --accent: #479ef5; --accent-hover: #62abf5; --ok-bg: #1d3023; --ok-fg: #6cc06c;
+  }
+  * { box-sizing: border-box; }
+  /* Fill the host iframe completely and paint the theme background so no white
+     gutter shows when the frame is wider/taller than the content. */
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; min-height: 100%;
+    background: var(--bg); color: var(--fg);
+  }
+  /* Root container: fills the available width; hidden overflow avoids double
+     scrollbars inside the host frame. */
+  #root {
+    overflow: hidden;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    padding: 24px;
+    width: 100%;
+  }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 24px;
+    background: var(--bg);
+    width: 100%;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  .sub { font-size: 13px; color: var(--muted); margin: 0 0 18px; }
+  .field { margin-bottom: 14px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  input, select {
+    width: 100%; padding: 8px 10px; font-size: 14px; color: var(--fg);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+    font-family: inherit;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  .row { display: flex; gap: 12px; }
+  .row .field { flex: 1; }
+  .actions { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+  button.primary {
+    background: var(--accent); color: #fff; border: none; border-radius: 6px;
+    padding: 9px 18px; font-size: 14px; font-weight: 600; cursor: pointer;
+    font-family: inherit;
+  }
+  button.primary:hover { background: var(--accent-hover); }
+  button.primary:disabled { opacity: .6; cursor: default; }
+  .success {
+    display: flex; gap: 10px; align-items: flex-start;
+    background: var(--ok-bg); color: var(--ok-fg);
+    border-radius: 6px; padding: 12px 14px; font-size: 14px; margin-bottom: 16px;
+  }
+  .success strong { font-weight: 600; }
+  .recent { margin-top: 22px; }
+  .recent h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
+  .item { display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .item:first-of-type { border-top: none; }
+  .item .meta { color: var(--muted); font-size: 12px; }
+  .amt { font-weight: 600; white-space: nowrap; }
+  .empty { font-size: 13px; color: var(--muted); }
+  .err { color: #b10e1c; font-size: 13px; margin-top: 8px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="card">
+    <h1>Submit an expense</h1>
+    <p class="sub">Add a business expense to your report.</p>
+
+    <div id="successBox" class="success hidden">
+      <span>&#10003;</span>
+      <div>Expense <strong id="successId"></strong> submitted. <span id="successSummary"></span></div>
+    </div>
+
+    <form id="form">
+      <div class="field">
+        <label for="merchant">Merchant</label>
+        <input id="merchant" name="merchant" type="text" placeholder="e.g. Trattoria Roma" required />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="amount">Amount</label>
+          <input id="amount" name="amount" type="number" min="0" step="0.01" placeholder="0.00" required />
+        </div>
+        <div class="field">
+          <label for="currency">Currency</label>
+          <select id="currency" name="currency">
+            <option value="EUR" selected>EUR</option>
+            <option value="USD">USD</option>
+            <option value="GBP">GBP</option>
+            <option value="CHF">CHF</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="category">Category</label>
+          <select id="category" name="category">
+            <option>Travel</option>
+            <option selected>Meals</option>
+            <option>Lodging</option>
+            <option>Supplies</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="date">Date</label>
+          <input id="date" name="date" type="date" required />
+        </div>
+      </div>
+      <div class="actions">
+        <button type="submit" class="primary" id="submitBtn">Submit expense</button>
+      </div>
+      <div id="errBox" class="err hidden"></div>
+    </form>
+
+    <div class="recent">
+      <h2>Recent expenses</h2>
+      <div id="recentList"><p class="empty">No expenses yet.</p></div>
+    </div>
+  </div>
+</div>
+
+<!--
+  The widget logic lives in src/widget.ts and is compiled + bundled (with the
+  @modelcontextprotocol/ext-apps SDK inlined) by scripts/build-widget.mjs.
+  The build replaces the marker below with the bundled <script>. Preview the
+  BUILT file (dist/widget.html), not this source.
+-->
+<!-- __WIDGET_BUNDLE__ -->
+</body>
+</html>

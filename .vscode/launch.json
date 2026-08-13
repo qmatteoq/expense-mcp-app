@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Builds the project, opens the PERSISTENT "expense-mcp" dev tunnel, then
+      // runs the compiled MCP server. The tunnel URL is stable across restarts,
+      // so the declarative agent manifest never needs updating:
+      //   https://553wgbcg-3000.euw.devtunnels.ms/mcp
+      "name": "Run with Dev Tunnel",
+      "type": "node",
+      "request": "launch",
+      "preLaunchTask": "build-and-tunnel",
+      "program": "${workspaceFolder}/dist/server.js",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "PORT": "3000"
+      }
+    },
+    {
+      // Run the server locally without a tunnel (build first).
+      "name": "Run (local only)",
+      "type": "node",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/dist/server.js",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "PORT": "3000"
+      }
+    }
+  ]
+}

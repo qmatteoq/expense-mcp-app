@@ -1,0 +1,65 @@
+{
+  "tools": [
+    {
+      "name": "submitExpense",
+      "description": "Submit a business expense (merchant, amount, currency, category, date) and return a confirmation with the created expense id.",
+      "annotations": {
+        "title": "Submit Expense",
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "merchant": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Merchant or vendor name, for example 'Lufthansa' or 'Hotel Adlon'."
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Expense amount as a positive number, without a currency symbol."
+          },
+          "currency": {
+            "type": "string",
+            "default": "EUR",
+            "description": "ISO 4217 currency code, for example EUR or USD. Defaults to EUR."
+          },
+          "category": {
+            "type": "string",
+            "enum": ["Travel", "Meals", "Lodging", "Supplies", "Other"],
+            "description": "Expense category."
+          },
+          "date": {
+            "type": "string",
+            "description": "Date the expense was incurred, in YYYY-MM-DD format."
+          }
+        },
+        "required": ["merchant", "amount", "category", "date"]
+      }
+    },
+    {
+      "name": "listExpenses",
+      "description": "Return the most recently submitted expenses.",
+      "annotations": {
+        "title": "List Expenses",
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 5,
+            "description": "Maximum number of expense rows to return."
+          }
+        },
+        "required": []
+      }
+    }
+  ]
+}

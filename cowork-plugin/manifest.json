@@ -1,0 +1,49 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.28/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.28",
+  "version": "1.0.0",
+  "id": "6f2a1c94-8d3b-5e7a-9c41-2b8f0d6ae315",
+  "developer": {
+    "name": "Contoso Expenses",
+    "websiteUrl": "https://contoso.com",
+    "privacyUrl": "https://contoso.com/privacy",
+    "termsOfUseUrl": "https://contoso.com/terms"
+  },
+  "name": {
+    "short": "Contoso Expenses",
+    "full": "Contoso Expenses for Copilot Cowork"
+  },
+  "description": {
+    "short": "Submit and review business expenses from Copilot Cowork",
+    "full": "Connects Copilot Cowork to the Contoso expense system so you can submit business expenses from receipts and review recently submitted expenses without leaving the conversation."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#2B579A",
+  "validDomains": [
+    "kcs17gxd-3000.euw.devtunnels.ms"
+  ],
+  "agentSkills": [
+    { "folder": "skills/expense-submission" }
+  ],
+  "agentConnectors": [
+    {
+      "id": "contoso-expense-mcp",
+      "displayName": "Contoso Expense System",
+      "description": "Submit business expenses and list recently submitted expenses.",
+      "toolSource": {
+        "remoteMcpServer": {
+          "mcpServerUrl": "https://kcs17gxd-3000.euw.devtunnels.ms/mcp",
+          "mcpToolDescription": {
+            "file": "tools/contoso-expense-tools.json"
+          },
+          "authorization": {
+            "type": "None"
+          }
+        }
+      }
+    }
+  ]
+}
