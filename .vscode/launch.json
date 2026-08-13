@@ -5,7 +5,7 @@
       // Builds the project, opens the PERSISTENT "expense-mcp" dev tunnel, then
       // runs the compiled MCP server. The tunnel URL is stable across restarts,
       // so the declarative agent manifest never needs updating:
-      //   https://553wgbcg-3000.euw.devtunnels.ms/mcp
+      //   https://<id>-3000.<region>.devtunnels.ms/mcp
       "name": "Run with Dev Tunnel",
       "type": "node",
       "request": "launch",

@@ -13,7 +13,7 @@
     {
       // Host the PERSISTENT named dev tunnel "expense-mcp" so M365 Copilot can
       // reach the local MCP server at a STABLE URL that survives restarts:
-      //   https://553wgbcg-3000.euw.devtunnels.ms/mcp
+      //   https://<id>-3000.<region>.devtunnels.ms/mcp
       // The tunnel was created once with:
       //   devtunnel create expense-mcp --allow-anonymous
       //   devtunnel port create expense-mcp -p 3000
