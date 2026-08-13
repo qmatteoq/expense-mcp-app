@@ -77,6 +77,37 @@ if (!existsSync(manifestPath)) {
 }
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
+/**
+ * The committed manifest ships a placeholder host so the repo carries no one
+ * developer's tunnel. Point it at your own server either by editing
+ * manifest.json or, to leave the tracked file alone, by setting MCP_SERVER_URL:
+ *
+ *   MCP_SERVER_URL=https://<id>-3000.<region>.devtunnels.ms/mcp npm run package:plugin
+ *
+ * The override is applied to the manifest copy written into the zip only; the
+ * file on disk is never rewritten.
+ */
+const PLACEHOLDER = "REPLACE-WITH-YOUR-TUNNEL";
+const overrideUrl = process.env.MCP_SERVER_URL?.trim();
+
+if (overrideUrl) {
+  let host;
+  try {
+    const parsed = new URL(overrideUrl);
+    if (parsed.protocol !== "https:") throw new Error("not https");
+    host = parsed.host;
+  } catch {
+    fail(`MCP_SERVER_URL is '${overrideUrl}'. It must be an absolute HTTPS URL, e.g. https://example.devtunnels.ms/mcp.`);
+  }
+  if (host) {
+    for (const c of manifest.agentConnectors ?? []) {
+      if (c.toolSource?.remoteMcpServer) c.toolSource.remoteMcpServer.mcpServerUrl = overrideUrl;
+    }
+    manifest.validDomains = [host];
+    console.log(`Using MCP_SERVER_URL override: ${overrideUrl}`);
+  }
+}
+
 for (const field of ["manifestVersion", "version", "id", "developer", "name", "description", "icons", "accentColor"]) {
   if (manifest[field] === undefined) fail(`manifest.json is missing required field '${field}'.`);
 }
@@ -171,6 +202,21 @@ for (const c of connectors) {
 
   if (!/^https:\/\//i.test(remote.mcpServerUrl ?? "")) {
     fail(`Connector '${c.id}': mcpServerUrl must be an HTTPS URL.`);
+  } else if (remote.mcpServerUrl.includes(PLACEHOLDER)) {
+    fail(
+      `Connector '${c.id}': mcpServerUrl is still the placeholder. Point it at your own server, ` +
+        `either by editing cowork-plugin/manifest.json or by re-running with ` +
+        `MCP_SERVER_URL=https://<id>-3000.<region>.devtunnels.ms/mcp.`
+    );
+  } else {
+    // Cowork blocks requests to hosts the manifest does not declare, so a
+    // mismatch here yields a connector that installs but never responds.
+    const host = new URL(remote.mcpServerUrl).host;
+    const domains = manifest.validDomains ?? [];
+    const covered = domains.some((d) => d === host || (d.startsWith("*.") && host.endsWith(d.slice(1))));
+    if (!covered) {
+      fail(`Connector '${c.id}': mcpServerUrl host '${host}' is not listed in validDomains (${domains.join(", ") || "empty"}).`);
+    }
   }
   const toolFile = remote.mcpToolDescription?.file;
   if (!toolFile) {
@@ -295,11 +341,14 @@ const dirs = [
 const entries = [...dirs, ...files].sort().map((name) => {
   const isDir = name.endsWith("/");
   const abs = join(PKG_DIR, isDir ? name.slice(0, -1) : name);
-  return {
-    name,
-    data: isDir ? Buffer.alloc(0) : readFileSync(abs),
-    mtime: statSync(abs).mtime,
-  };
+  // manifest.json is emitted from the in-memory object so an MCP_SERVER_URL
+  // override lands in the package without touching the working tree.
+  const data = isDir
+    ? Buffer.alloc(0)
+    : name === "manifest.json"
+      ? Buffer.from(JSON.stringify(manifest, null, 2) + "\n", "utf8")
+      : readFileSync(abs);
+  return { name, data, mtime: statSync(abs).mtime };
 });
 
 writeFileSync(OUT_ZIP, zip(entries));

@@ -16,7 +16,7 @@ BeConnected talk *"MCP in the M365 Copilot ecosystem."*
 
 | Host | Packaging | Section |
 | --- | --- | --- |
-| **Microsoft 365 Copilot** | Declarative agent + MCP action, via Agents Toolkit | [§4](#4-use-it-with-a-declarative-agent-m365-copilot) |
+| **Microsoft 365 Copilot** | Declarative agent + MCP action, via Agents Toolkit | [§4](#4-use-it-with-a-declarative-agent-microsoft-365-copilot) |
 | **Copilot Cowork** | Plugin `.zip`: connector + Agent Skill | [§7](#7-use-it-with-copilot-cowork) |
 
 ---
@@ -183,10 +183,15 @@ find. The **connector** supplies the tools the skill calls.
 
 ### Step 1 — Point the manifest at your tunnel
 
-In `cowork-plugin/manifest.json`, set `mcpServerUrl` to your tunnel URL plus `/mcp`, and add
-the same host to `validDomains`:
+The committed manifest ships a **placeholder** host, so the repo carries nobody's personal
+tunnel. Replace it before packaging, either way:
+
+**Option A — edit the manifest.** In `cowork-plugin/manifest.json`, set `mcpServerUrl` to
+your tunnel URL plus `/mcp`, and put the same host in `validDomains`:
 
 ```json
+"validDomains": ["<id>-3000.<region>.devtunnels.ms"],
+...
 "remoteMcpServer": {
   "mcpServerUrl": "https://<id>-3000.<region>.devtunnels.ms/mcp",
   "mcpToolDescription": { "file": "tools/contoso-expense-tools.json" },
@@ -194,7 +199,27 @@ the same host to `validDomains`:
 }
 ```
 
-> **Do not write `./tools/...`.** See [Package paths must not start with `./`](#package-paths-must-not-start-with-).
+**Option B — pass it at build time** and leave the tracked file untouched (handy when your
+tunnel changes, or to keep `git status` clean):
+
+```powershell
+$env:MCP_SERVER_URL = "https://<id>-3000.<region>.devtunnels.ms/mcp"
+npm run package:plugin
+npm run check:connector
+```
+
+`MCP_SERVER_URL` rewrites `mcpServerUrl` **and** `validDomains` in the manifest copy written
+into the zip. The file on disk is never modified.
+
+> Both hosts must agree. Cowork blocks requests to hosts the manifest does not declare, so a
+> `validDomains` mismatch produces a connector that installs cleanly and then never responds.
+> The packager checks this for you.
+
+> **Do not write `./tools/...`.** The package service compares the declared path against zip
+> entry names *literally*, and those names carry no `./` prefix — so a leading `./` fails the
+> upload with `400 InvalidAgentConnector: ... not found in the app package`, even though the
+> official docs write it that way. Use the bare form (`tools/contoso-expense-tools.json`),
+> which matches either way. `npm run package:plugin` rejects the `./` spelling for you.
 
 ### Step 2 — Build the package
 
@@ -210,7 +235,8 @@ out in a second rather than after a round trip:
 - a missing `mcpToolDescription`, or one pointing at a file not in the zip (HTTP 400)
 - a `SKILL.md` `name` that does not match its folder (ASKILL-P006)
 - a name that is not kebab-case (ASKILL-P007)
-- a non-HTTPS `mcpServerUrl`, or `referenceId` misuse
+- a non-HTTPS `mcpServerUrl`, an unreplaced placeholder, or a host missing from `validDomains`
+- `referenceId` misuse for the declared authorization type
 - companion-file count and size limits
 - tools declared without MCP annotations
 
@@ -221,7 +247,7 @@ npm run check:connector
 ```
 
 This runs `initialize` → `notifications/initialized` → `tools/list` against the exact
-`mcpServerUrl` in the manifest, asserts every tool declared in
+`mcpServerUrl` in the manifest (or `MCP_SERVER_URL`, if set), asserts every tool declared in
 `tools/contoso-expense-tools.json` is really served with matching annotations, and verifies
 the MCP apps widget contract (see [§8](#8-mcp-apps-widget-conformance-in-cowork)).
 
@@ -302,6 +328,9 @@ rules live in the server's runtime responses rather than in the `.zip`.
 | Self-contained HTML (no external assets) | Widget + SDK inlined by `build-widget.mjs` |
 | Graceful degradation when no widget renders | Every result carries a text summary |
 | Avoids unsupported `ui/open-link`, `ui/update-model-context`, `pip` | None are used |
+
+---
+
 ## Scripts
 
 | Script | What it does |
@@ -312,6 +341,10 @@ rules live in the server's runtime responses rather than in the `.zip`.
 | `npm run build:icons` | Regenerates the Cowork package icons |
 | `npm run package:plugin` | Validates and zips the Cowork plugin → `dist/cowork-plugin.zip` |
 | `npm run check:connector` | Live conformance check against the manifest's `mcpServerUrl` |
+
+`package:plugin` and `check:connector` both honour the `MCP_SERVER_URL` environment
+variable, which overrides the manifest's `mcpServerUrl` and `validDomains` without editing
+the tracked file. See [§7 Step 1](#step-1--point-the-manifest-at-your-tunnel).
 
 ---
 

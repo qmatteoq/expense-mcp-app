@@ -48,7 +48,16 @@ for (const connector of manifest.agentConnectors ?? []) {
   const remote = connector.toolSource?.remoteMcpServer;
   if (!remote) continue;
 
-  const url = remote.mcpServerUrl;
+  const url = process.env.MCP_SERVER_URL?.trim() || remote.mcpServerUrl;
+  if (url.includes("REPLACE-WITH-YOUR-TUNNEL")) {
+    console.error(
+      `\n${connector.id}: mcpServerUrl is still the placeholder — nothing to check against.\n` +
+        `Edit cowork-plugin/manifest.json, or run:\n` +
+        `  MCP_SERVER_URL=https://<id>-3000.<region>.devtunnels.ms/mcp npm run check:connector`
+    );
+    failed = true;
+    continue;
+  }
   console.log(`\n${connector.id} -> ${url}`);
 
   const init = await rpc(url, {

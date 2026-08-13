@@ -23,7 +23,7 @@
   },
   "accentColor": "#2B579A",
   "validDomains": [
-    "kcs17gxd-3000.euw.devtunnels.ms"
+    "REPLACE-WITH-YOUR-TUNNEL.devtunnels.ms"
   ],
   "agentSkills": [
     { "folder": "skills/expense-submission" }
@@ -35,7 +35,7 @@
       "description": "Submit business expenses and list recently submitted expenses.",
       "toolSource": {
         "remoteMcpServer": {
-          "mcpServerUrl": "https://kcs17gxd-3000.euw.devtunnels.ms/mcp",
+          "mcpServerUrl": "https://REPLACE-WITH-YOUR-TUNNEL.devtunnels.ms/mcp",
           "mcpToolDescription": {
             "file": "tools/contoso-expense-tools.json"
           },
