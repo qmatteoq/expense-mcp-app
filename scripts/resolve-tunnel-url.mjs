@@ -9,18 +9,22 @@
  *   npm run tunnel:url
  *
  * Flags:
- *   --soft   warn instead of failing when the URL cannot be resolved. Used by
- *            the VS Code task so a tunnel hiccup never blocks the debug session.
+ *   --soft      warn instead of failing when the URL cannot be resolved. Used by
+ *               the VS Code task so a tunnel hiccup never blocks the debug session.
+ *   --package   after resolving, rebuild dist/cowork-plugin.zip against that exact
+ *               URL, so the packaged manifest always matches the running tunnel.
  *
  * Env:
  *   DEVTUNNEL_NAME   tunnel to inspect (default "expense-mcp")
  *   PORT             port to match inside the tunnel (default 3000)
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
-import { TUNNEL_URL_FILE } from "./tunnel-url.mjs";
+import { join } from "node:path";
+import { ROOT, TUNNEL_URL_FILE } from "./tunnel-url.mjs";
 
 const SOFT = process.argv.includes("--soft");
+const PACKAGE = process.argv.includes("--package");
 const TUNNEL = process.env.DEVTUNNEL_NAME?.trim() || "expense-mcp";
 const PORT = Number(process.env.PORT) || 3000;
 const MCP_PATH = "/mcp";
@@ -39,6 +43,35 @@ function giveUp(message, hint) {
   }
   console.error(`\n[tunnel-url] ${text}`);
   process.exit(1);
+}
+
+/**
+ * Rebuilds dist/cowork-plugin.zip against the URL we just resolved.
+ *
+ * MCP_SERVER_URL is passed explicitly rather than relying on the .tunnel-url we
+ * just wrote, so the zip provably matches this run even if something else edits
+ * the file in between. build-icons runs first because package-plugin refuses to
+ * zip a manifest whose icons are missing; its output is deterministic, so the
+ * tracked PNGs do not change.
+ */
+function packagePlugin(url) {
+  const env = { ...process.env, MCP_SERVER_URL: url };
+  for (const script of ["build-icons.mjs", "package-plugin.mjs"]) {
+    const res = spawnSync(process.execPath, [join(ROOT, "scripts", script)], {
+      cwd: ROOT,
+      env,
+      stdio: ["ignore", "inherit", "inherit"],
+    });
+    if (res.status !== 0) {
+      const msg = `[tunnel-url] ${script} failed (exit ${res.status}); dist/cowork-plugin.zip was not refreshed.`;
+      if (SOFT) {
+        console.warn(`${msg}\n[tunnel-url] Continuing so the debug session can start.`);
+        return;
+      }
+      console.error(msg);
+      process.exit(1);
+    }
+  }
 }
 
 function showTunnel() {
@@ -105,6 +138,12 @@ for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
 
   console.log(`[tunnel-url] ${url}`);
   console.log(`[tunnel-url] wrote .tunnel-url; package:plugin and check:connector will use it.`);
+
+  if (PACKAGE) {
+    console.log(`[tunnel-url] rebuilding dist/cowork-plugin.zip against this URL...`);
+    packagePlugin(url);
+  }
+
   process.exit(0);
 }
 

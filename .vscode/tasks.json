@@ -49,28 +49,33 @@
       }
     },
     {
-      // Once the tunnel reports ready, resolve its public URL and write it to
-      // .tunnel-url (git-ignored). `package:plugin` and `check:connector` read
-      // that file, so the placeholder in cowork-plugin/manifest.json is never
-      // rewritten and your working tree stays clean.
+      // Once the tunnel reports ready, resolve its public URL, write it to
+      // .tunnel-url (git-ignored), and rebuild dist/cowork-plugin.zip against
+      // that exact URL — so the zip on disk always matches the tunnel that is
+      // actually running. The placeholder in cowork-plugin/manifest.json is
+      // never rewritten, so your working tree stays clean.
       // --soft: a tunnel hiccup warns instead of blocking the debug session.
       // Invoked via node rather than `npm run -- --soft`, because npm does not
       // reliably forward the flag through to the script.
       "label": "resolve-tunnel-url",
       "type": "shell",
       "command": "node",
-      "args": ["scripts/resolve-tunnel-url.mjs", "--soft"],
+      "args": ["scripts/resolve-tunnel-url.mjs", "--soft", "--package"],
       "options": { "cwd": "${workspaceFolder}" },
       "presentation": {
         "panel": "dedicated",
         "group": "run-with-tunnel",
-        "reveal": "silent",
-        "close": true
+        // Shown, but without stealing focus: --soft turns packaging problems
+        // into warnings, so this panel is the only place they surface.
+        "reveal": "always",
+        "focus": false,
+        "close": false
       },
       "problemMatcher": []
     },
     {
-      // Build, bring up the tunnel, capture its URL; used as the launch preLaunchTask.
+      // Build, host the tunnel, then capture its URL and repackage the plugin;
+      // used as the launch preLaunchTask.
       "label": "build-and-tunnel",
       "dependsOrder": "sequence",
       "dependsOn": ["build", "dev-tunnel", "resolve-tunnel-url"]

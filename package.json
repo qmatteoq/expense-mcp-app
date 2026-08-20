@@ -11,6 +11,7 @@
     "package:plugin": "node scripts/build-icons.mjs && node scripts/package-plugin.mjs",
     "check:connector": "node scripts/check-connector.mjs",
     "tunnel:url": "node scripts/resolve-tunnel-url.mjs",
+    "tunnel:package": "node scripts/resolve-tunnel-url.mjs --package",
     "start": "node dist/server.js"
   },
   "dependencies": {

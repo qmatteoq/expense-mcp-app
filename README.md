@@ -193,15 +193,19 @@ precedence order, and never rewrites the file on disk unless you edit it yoursel
 
 **Option A — let the VS Code launch do it (recommended).** Run the **Run with Dev Tunnel**
 profile. After the tunnel reports ready, the `resolve-tunnel-url` task queries
-`devtunnel show` and writes the live URL to `.tunnel-url` (git-ignored). Nothing else to do:
+`devtunnel show`, writes the live URL to `.tunnel-url` (git-ignored), **and rebuilds
+`dist/cowork-plugin.zip` against that exact URL**. So the zip on disk always matches the
+tunnel that is actually running — press F5, then upload.
+
+To do the same without a debug session:
 
 ```powershell
-npm run package:plugin
-npm run check:connector
+npm run tunnel:package   # resolve the URL and repackage
+npm run tunnel:url       # resolve the URL only
 ```
 
-Both pick the file up automatically and print `(from .tunnel-url)`. To refresh it without a
-debug session, run `npm run tunnel:url`.
+`package:plugin` and `check:connector` also read `.tunnel-url` on their own, printing
+`(from .tunnel-url)`.
 
 **Option B — pass it at build time**, which overrides `.tunnel-url`:
 
@@ -405,6 +409,7 @@ prefer interviewing you over opening the form.
 | `npm run package:plugin` | Validates and zips the Cowork plugin → `dist/cowork-plugin.zip` |
 | `npm run check:connector` | Live conformance check against the manifest's `mcpServerUrl` |
 | `npm run tunnel:url` | Resolves the `expense-mcp` tunnel URL into `.tunnel-url` |
+| `npm run tunnel:package` | Same, then rebuilds `dist/cowork-plugin.zip` against that URL |
 
 `package:plugin` and `check:connector` resolve the MCP server URL in this order:
 `MCP_SERVER_URL` → the git-ignored `.tunnel-url` file → whatever the manifest holds. The
