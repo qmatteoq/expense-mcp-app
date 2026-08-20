@@ -7,8 +7,9 @@ BeConnected talk *"MCP in the M365 Copilot ecosystem."*
 
 - **Transport:** Remote MCP server over **Streamable HTTP** (SSE is deprecated).
 - **SDK:** Official MCP TypeScript SDK (`@modelcontextprotocol/sdk`) on Node.js + Express.
-- **Tool:** `submitExpense` returns `structuredContent` **and** references a UI widget via
-  `_meta.ui.resourceUri`. Plus a read-only `listExpenses`.
+- **Tools:** `openExpenseForm` opens the widget with no required arguments, so the agent
+  never interviews you for details first; `submitExpense` records what you enter and is
+  **widget-only**; `listExpenses` is read-only. See [Form-first design](#form-first-design).
 - **Widget:** single-file HTML/CSS/JS served as `text/html;profile=mcp-app`, Fluent-2 styled.
 - **Auth:** **Anonymous (development only).**
 
@@ -99,11 +100,14 @@ In VS Code with the **Microsoft 365 Agents Toolkit**:
 3. **Enter the MCP server URL**: your public tunnel URL ending in `/mcp`
    (e.g. `https://<id>-3000.<region>.devtunnels.ms/mcp`).
 4. Run **ATK: Fetch action from MCP** — the Toolkit introspects the server.
-5. **Select the `submitExpense` tool** (it has an associated widget via `_meta.ui.resourceUri`). Add `listExpenses` too if you want the read-only path.
+5. **Select the `openExpenseForm` tool** — this is the entry point that renders the widget.
+   Add `listExpenses` too if you want the read-only path. You do **not** need to select
+   `submitExpense`: it is widget-only by design (see [Form-first design](#form-first-design)),
+   and the widget calls it through the host bridge rather than through the agent.
 6. **Choose authentication: Anonymous.**
 7. **Provision** the agent (uploads the declarative agent + action package to your tenant).
-8. **Test** at **https://m365.cloud.microsoft/chat** — open your agent and ask it to submit an
-   expense (e.g. *"Submit a 42 EUR meal at Trattoria Roma today"*). The inline widget renders.
+8. **Test** at **https://m365.cloud.microsoft/chat** — open your agent and say *"I need to
+   submit an expense"*. The form renders immediately, with no questions asked first.
 
 **Iterating:** changes to the tool logic or the widget need only `npm run build` + a server
 restart — the host reads both live. Re-provision only when the *action* itself changes
@@ -114,8 +118,8 @@ If ATK reports that the server exposes **no tools**, see [§6](#6-troubleshootin
 
 ## 5. What to show on stage
 
-1. Open the agent in **https://m365.cloud.microsoft/chat** and trigger `submitExpense`.
-2. The **inline widget** renders right in the conversation: a Fluent-2 expense form (merchant, amount, currency, category, date) plus a **Recent expenses** list seeded with two rows.
+1. Open the agent in **https://m365.cloud.microsoft/chat** and say *"I need to submit an expense"*.
+2. The **inline widget** renders **immediately** — no interview. A Fluent-2 expense form (merchant, amount, currency, category, date) plus a **Recent expenses** list seeded with two rows. Mention a detail up front (*"…a 42 EUR taxi"*) and the form arrives **prefilled**.
 3. Fill the form and click **Submit expense** — the widget calls the server tool through the host bridge and flips to a **success state** showing the returned **expense id** and summary.
 4. The new expense appears at the top of **Recent expenses** (served from `structuredContent`).
 5. Point out: the widget **feature-detects** the host API and falls back gracefully, so the very same file also previews standalone in a browser.
@@ -143,7 +147,7 @@ MCP TypeScript SDK (already implemented in `src/server.ts`):
 **Verify the fix:**
 
 1. Press **Start** on the server in **`.vscode/mcp.json`** (or `npm start`).
-2. Run **ATK: Fetch action from MCP** — the \*\*`submitExpense`\*\* and **`listExpenses`** tools should now appear.
+2. Run **ATK: Fetch action from MCP** — the **`openExpenseForm`**, **`submitExpense`** and **`listExpenses`** tools should now appear.
 
 If it still fails, enable Copilot debug logs with **`-developer on`** to inspect
 the raw `initialize` / `tools/list` exchange and confirm a session id is issued.
@@ -170,7 +174,7 @@ cowork-plugin/                     # sources, zipped with contents at the ROOT
     contoso-expense-tools.json     # mcpToolDescription target (REQUIRED for connectors)
   skills/
     expense-submission/
-      SKILL.md                     # workflow: receipt -> submitExpense
+      SKILL.md                     # workflow: intent -> openExpenseForm (never interview)
       references/
         expense-categories.md      # loaded on demand, keeps SKILL.md lean
 dist/cowork-plugin.zip             # the uploadable package
@@ -274,17 +278,22 @@ Either way, the plugin then appears under **Cowork** → **Sources & Skills** �
 
 ### Step 5 — Try it
 
-> *"Submit a 42 EUR meal at Trattoria Roma today"*
+> *"I need to submit an expense"*
 
-The skill triggers, Cowork calls `submitExpense`, and the widget mounts inline showing the
-new expense id and the recent-expenses list. Fill the form and click **Submit expense** —
+The skill triggers, Cowork calls `openExpenseForm`, and the widget mounts inline —
+**immediately, with no questions asked first**. Fill it in and click **Submit expense**;
 that call goes from the widget straight back to your server.
 
 Also worth demoing:
 
+- *"Expense my 42 EUR taxi from yesterday"* → the same form, arriving **prefilled** with
+  amount, currency, category and date, leaving only the merchant to type.
 - *"What expenses have I submitted?"* → `listExpenses`, runs with no confirmation prompt
   because it is annotated `readOnlyHint: true`.
-- *"Expense this receipt"* with a receipt attached → the skill reads it and fills the fields.
+- *"Expense this receipt"* with a receipt attached → the skill reads it and prefills the form.
+
+Opening the form is also prompt-free, since `openExpenseForm` is `readOnlyHint: true` —
+it records nothing. The confirmation, if any, belongs on the submit.
 
 ### Iterating
 
@@ -323,11 +332,53 @@ rules live in the server's runtime responses rather than in the `.zip`.
 | Tool declares `_meta.ui.resourceUri` with a `ui://` URI (≤ 1024 chars) | `ui://widget/expense-form.html` |
 | Tool handler returns data, not HTML | Returns `content` + `structuredContent` |
 | Resource serves HTML as `text` with `text/html;profile=mcp-app` | Yes — `text`, not a base64 `blob` |
-| Inline tool result under 64 KiB | ~415 bytes; `recent` is capped at 50 rows |
-| `visibility` includes `"app"` for widget-initiated calls | `["model", "app"]` |
+| Inline tool result under 64 KiB | ~590 bytes; `recent` is capped at 50 rows |
+| `visibility` includes `"app"` for widget-initiated calls | `["model", "app"]`, or `["app"]` for the widget-only `submitExpense` |
 | Self-contained HTML (no external assets) | Widget + SDK inlined by `build-widget.mjs` |
 | Graceful degradation when no widget renders | Every result carries a text summary |
 | Avoids unsupported `ui/open-link`, `ui/update-model-context`, `pip` | None are used |
+
+---
+
+## Form-first design
+
+By default an MCP widget arrives **too late to collect anything**. It renders as a tool
+*result*, so the agent must already have called the tool — and it cannot call a tool without
+filling in that tool's required arguments. A single `submitExpense(merchant, amount,
+category, date)` therefore produces exactly the interview you were trying to avoid:
+
+> **You:** I need to submit an expense
+> **Agent:** Sure — what was the merchant? … And the amount? … And the date?
+> *(only now does the form appear, asking for what you just typed)*
+
+This server splits that in two:
+
+| Tool | Required args | Visibility | Role |
+| --- | --- | --- | --- |
+| `openExpenseForm` | **none** | `model`, `app` | The agent's entry point. Callable the instant you express intent, so the form is the *first* thing you see. |
+| `submitExpense` | merchant, amount, category, date | **`app` only** | Records the expense. The widget's Submit button calls it. |
+| `listExpenses` | none | `model`, `app` | Read-only lookup. |
+
+Two details make it hold:
+
+- **`openExpenseForm` requires nothing.** The agent can call it immediately. Anything you
+  did mention (*"my 42 EUR taxi"*) is passed as optional `prefill` and lands in the form
+  fields, so volunteering details still speeds things up — it just never becomes a
+  prerequisite. It is `readOnlyHint: true`, so it records nothing and hosts do not gate it
+  behind a confirmation prompt.
+- **`submitExpense` is hidden from the model** via `visibility: ["app"]`. This is what makes
+  the behavior reliable rather than merely likely: a model-visible write tool is an
+  ever-present temptation for the agent to gather arguments in chat, no matter what the
+  prompt says. Hiding it leaves `openExpenseForm` as the only door in. The widget can still
+  call it, because widget-initiated calls are authorized by `"app"`.
+
+The `SKILL.md` reinforces this in prose ("do not ask for details, open the form"), but the
+schema is what enforces it.
+
+**To allow one-shot submissions again** — the agent recording an expense directly when you
+give it every detail — give `submitExpense` back `visibility: ["model", "app"]` in
+`src/server.ts` (use `UI_META` instead of `UI_META_APP_ONLY`). Expect the agent to sometimes
+prefer interviewing you over opening the form.
 
 ---
 
@@ -355,7 +406,7 @@ expense-mcp-app/
   package.json        # scripts: build, package:plugin, check:connector, start
   tsconfig.json       # ES2022, NodeNext, strict, outDir dist
   src/
-    server.ts         # MCP server: Streamable HTTP, submitExpense + listExpenses, widget resource
+    server.ts         # MCP server: Streamable HTTP, openExpenseForm + submitExpense + listExpenses, widget resource
     widget.ts         # widget logic against the MCP Apps SDK
     widget.html       # single-file inline widget (HTML + CSS + JS), served as the UI resource
   scripts/

@@ -35,6 +35,8 @@ interface Expense {
 }
 
 interface ExpenseToolData {
+  mode?: string;
+  prefill?: Partial<Omit<Expense, "id">>;
   expense?: Expense;
   summary?: string;
   recent?: Expense[];
@@ -127,6 +129,38 @@ function parseToolResult(params: {
 // --- Shared state ------------------------------------------------------------
 let recent: Expense[] = [];
 
+// Populate the form with whatever the user already mentioned in chat. Only
+// fields actually supplied are touched, so the widget's own defaults (today's
+// date, EUR) survive. Unknown category values are ignored rather than forcing
+// the <select> into an invalid state.
+function applyPrefill(prefill: Partial<Omit<Expense, "id">> | undefined): void {
+  if (!prefill) return;
+
+  if (prefill.merchant) el<HTMLInputElement>("merchant").value = String(prefill.merchant);
+  if (typeof prefill.amount === "number" && prefill.amount > 0) {
+    el<HTMLInputElement>("amount").value = String(prefill.amount);
+  }
+  if (prefill.date) el<HTMLInputElement>("date").value = String(prefill.date);
+
+  for (const [id, value] of [
+    ["currency", prefill.currency],
+    ["category", prefill.category],
+  ] as const) {
+    if (!value) continue;
+    const select = el<HTMLSelectElement>(id);
+    if (select && Array.from(select.options).some((o) => o.value === value)) {
+      select.value = String(value);
+    }
+  }
+
+  // Send focus to the first field still empty, so the user lands on what is
+  // actually left to type rather than at the top of a mostly-filled form.
+  const firstEmpty = ["merchant", "amount", "date"]
+    .map((id) => el<HTMLInputElement>(id))
+    .find((input) => input && !input.value);
+  firstEmpty?.focus();
+}
+
 function applyData(data: ExpenseToolData | null): void {
   if (!data) return;
   if (Array.isArray(data.recent)) {
@@ -137,6 +171,9 @@ function applyData(data: ExpenseToolData | null): void {
     const cur = el<HTMLSelectElement>("currency");
     if (cur) cur.value = data.currency;
   }
+  applyPrefill(data.prefill);
+  // Only a completed submission carries an expense; opening the form must not
+  // show a success box for something that has not been recorded yet.
   if (data.expense) {
     showSuccess(data);
   }

@@ -1,7 +1,8 @@
 # Expense Categories
 
-The `submitExpense` tool accepts exactly one of five categories. Use this
-mapping when classifying a receipt.
+The expense form accepts exactly one of five categories. Use this mapping when
+classifying a receipt to prefill `openExpenseForm`. If the mapping is not clear,
+leave the category unset and let the user pick it in the form.
 
 ## Travel
 

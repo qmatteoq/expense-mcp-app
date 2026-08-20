@@ -1,8 +1,45 @@
 {
   "tools": [
     {
+      "name": "openExpenseForm",
+      "description": "Open the interactive expense form so the user can enter an expense themselves. Call this immediately whenever the user wants to submit, file, add, or log an expense. Do NOT ask the user for the merchant, amount, currency, category, or date first — the form collects them. Pass any details the user already mentioned as prefill values; omit anything they did not say rather than guessing.",
+      "annotations": {
+        "title": "Open Expense Form",
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "merchant": {
+            "type": "string",
+            "description": "Prefill: merchant or vendor name, if the user mentioned one."
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Prefill: amount as a positive number, if the user mentioned one."
+          },
+          "currency": {
+            "type": "string",
+            "description": "Prefill: ISO 4217 currency code, if the user mentioned one."
+          },
+          "category": {
+            "type": "string",
+            "enum": ["Travel", "Meals", "Lodging", "Supplies", "Other"],
+            "description": "Prefill: category, if it is clear from what the user said."
+          },
+          "date": {
+            "type": "string",
+            "description": "Prefill: date in YYYY-MM-DD format, if the user mentioned one."
+          }
+        },
+        "required": []
+      }
+    },
+    {
       "name": "submitExpense",
-      "description": "Submit a business expense (merchant, amount, currency, category, date) and return a confirmation with the created expense id.",
+      "description": "Record a business expense (merchant, amount, currency, category, date) and return a confirmation with the created expense id. Called by the expense form widget when the user submits it.",
       "annotations": {
         "title": "Submit Expense",
         "readOnlyHint": false,

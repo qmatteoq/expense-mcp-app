@@ -2,8 +2,11 @@
  * Minimal, anonymous MCP "app" for the M365 Copilot ecosystem.
  *
  * - Remote MCP server over Streamable HTTP (SSE is deprecated).
- * - One tool, `submitExpense`, that returns structured content AND references
- *   an interactive UI widget via `_meta.ui.resourceUri`.
+ * - `openExpenseForm` — the model-facing entry point. Takes no required
+ *   arguments, so the agent opens the widget the moment the user expresses
+ *   intent instead of interviewing them for values first.
+ * - `submitExpense` — records the expense. Widget-only (`visibility: ["app"]`),
+ *   so the agent cannot bypass the form by collecting values in chat.
  * - One UI resource (the widget) served as `text/html;profile=mcp-app`.
  * - A trivial read-only `listExpenses` tool.
  * - In-memory store, NO authentication (development only).
@@ -35,15 +38,28 @@ const WIDGET_MIME = "text/html;profile=mcp-app";
 
 // `_meta.ui` attached to every widget-enabled tool.
 //
-// `visibility` MUST include "app" as well as "model". The widget's Submit
-// button calls `submitExpense` back through the host via `callServerTool`, and
-// hosts enforce visibility at call time: a tool whose declared visibility
-// excludes "app" is refused when a widget invokes it. Declaring only ["model"]
-// leaves the tool visible to the agent but makes the widget's own submit fail.
+// `visibility` MUST include "app" wherever the widget calls the tool back. The
+// widget's Submit button invokes `submitExpense` via `callServerTool`, and hosts
+// enforce visibility at call time: a tool whose declared visibility excludes
+// "app" is refused when a widget invokes it. Declaring only ["model"] leaves the
+// tool visible to the agent but makes the widget's own submit fail.
 // (Omitting `visibility` entirely defaults to both, but being explicit
 // documents the intent.)
 const UI_META = {
   ui: { resourceUri: WIDGET_URI, visibility: ["model", "app"] },
+} as const;
+
+// Widget-only: callable by the widget, hidden from the model.
+//
+// This is what makes "I need to submit an expense" open the form instead of
+// starting an interview. An agent cannot call a tool without supplying its
+// required arguments, so any model-visible tool that requires merchant/amount/
+// date forces the agent to collect them in chat first — and the widget, which
+// only ever appears as a tool result, arrives too late to be the thing that
+// collects them. Hiding the writing tool from the model leaves `openExpenseForm`
+// as the only entry point, so the form is always what the user sees first.
+const UI_META_APP_ONLY = {
+  ui: { resourceUri: WIDGET_URI, visibility: ["app"] },
 } as const;
 // `build` is just `tsc`, which does not copy widget.html. Resolve it from the
 // dist sibling if present, otherwise fall back to the src copy.
@@ -116,14 +132,82 @@ function createMcpServer(): McpServer {
     })
   );
 
-  // Primary tool: submit an expense. Returns structured content and points the
-  // host at the widget via `_meta.ui.resourceUri`.
+  // Entry point: open the expense form. Takes NO required arguments, so the
+  // agent can call it the moment the user expresses intent ("I need to submit
+  // an expense") without interviewing them for values first. Any details the
+  // user happened to mention are passed through as `prefill` and land in the
+  // form fields, where the user can correct them before submitting.
+  //
+  // Read-only: it opens a form and records nothing, so hosts do not gate it
+  // behind a confirmation prompt. The write happens later, in `submitExpense`,
+  // when the user clicks Submit.
+  server.registerTool(
+    "openExpenseForm",
+    {
+      title: "Open expense form",
+      description:
+        "Open the interactive expense form so the user can enter an expense themselves. " +
+        "Call this immediately whenever the user wants to submit, file, add, or log an expense. " +
+        "Do NOT ask the user for the merchant, amount, currency, category, or date first — the " +
+        "form collects them. Pass any details the user already mentioned as prefill values; " +
+        "omit anything they did not say rather than guessing.",
+      annotations: {
+        title: "Open Expense Form",
+        readOnlyHint: true,
+        destructiveHint: false,
+      },
+      inputSchema: {
+        merchant: z.string().optional().describe("Prefill: merchant or vendor name, if the user mentioned one"),
+        amount: z.number().positive().optional().describe("Prefill: amount, if the user mentioned one"),
+        currency: z.string().optional().describe("Prefill: ISO currency code, if the user mentioned one"),
+        category: z.enum(CATEGORIES).optional().describe("Prefill: category, if it is clear from what the user said"),
+        date: z.string().optional().describe("Prefill: date as YYYY-MM-DD, if the user mentioned one"),
+      },
+      _meta: { ...UI_META },
+    },
+    async ({ merchant, amount, currency, category, date }) => {
+      // Only include keys the caller actually supplied; an explicit undefined
+      // would otherwise blank out the widget's own defaults (such as today's date).
+      const prefill: Partial<Omit<Expense, "id">> = {};
+      if (merchant !== undefined) prefill.merchant = merchant;
+      if (amount !== undefined) prefill.amount = amount;
+      if (currency !== undefined) prefill.currency = currency;
+      if (category !== undefined) prefill.category = category;
+      if (date !== undefined) prefill.date = date;
+
+      const mentioned = Object.keys(prefill).length
+        ? ` Prefilled: ${Object.entries(prefill).map(([k, v]) => `${k}=${v}`).join(", ")}.`
+        : "";
+
+      return {
+        // Text fallback for hosts that render no widget, and to stop the agent
+        // narrating a submission that has not happened yet.
+        content: [
+          {
+            type: "text",
+            text: `Expense form opened. Ask the user to fill it in and submit.${mentioned}`,
+          },
+        ],
+        structuredContent: {
+          mode: "form",
+          prefill,
+          recent: recentExpenses(),
+        },
+        _meta: { ...UI_META },
+      };
+    }
+  );
+
+  // Records the expense. Widget-only (see UI_META_APP_ONLY): the widget's Submit
+  // button calls this via `callServerTool`. Hidden from the model so the agent
+  // cannot bypass the form by collecting the values in chat instead.
   server.registerTool(
     "submitExpense",
     {
       title: "Submit expense",
       description:
-        "Submit a business expense (merchant, amount, currency, category, date) and return a confirmation with the created expense id.",
+        "Record a business expense (merchant, amount, currency, category, date) and return a confirmation with the created expense id. " +
+        "Called by the expense form widget when the user submits it.",
       // Copilot Cowork reads these to decide whether to prompt for confirmation.
       // Tools with no annotations are treated as destructive.
       annotations: {
@@ -139,9 +223,9 @@ function createMcpServer(): McpServer {
         date: z.string().describe("Expense date, e.g. 2025-05-04"),
       },
       _meta: {
-        // Tells the host which UI resource renders this tool's result. Also
-        // keeps the tool callable by both the model and the widget itself.
-        ...UI_META,
+        // Tells the host which UI resource renders this tool's result, and keeps
+        // the tool callable by the widget while hiding it from the model.
+        ...UI_META_APP_ONLY,
       },
     },
     async ({ merchant, amount, currency, category, date }) => {
@@ -164,7 +248,7 @@ function createMcpServer(): McpServer {
           summary,
           recent: recentExpenses(),
         },
-        _meta: { ...UI_META },
+        _meta: { ...UI_META_APP_ONLY },
       };
     }
   );

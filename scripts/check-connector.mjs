@@ -108,12 +108,13 @@ for (const connector of manifest.agentConnectors ?? []) {
     // visibility at call time: a declared visibility without "app" refuses
     // widget-initiated tools/call.
     if (ui.visibility) {
-      if (!ui.visibility.includes("model")) {
-        console.warn(`    visibility omits "model" — the agent cannot call '${tool.name}'.`);
-      }
       if (!ui.visibility.includes("app")) {
         console.error(`    visibility omits "app" — widget-initiated calls to '${tool.name}' are refused.`);
         failed = true;
+      } else if (!ui.visibility.includes("model")) {
+        // Deliberate for tools the widget owns: hiding a write tool from the
+        // model is what stops the agent collecting its arguments in chat.
+        console.log(`    visibility    [${ui.visibility.join(", ")}] (widget-only; the agent cannot call it)`);
       } else {
         console.log(`    visibility    [${ui.visibility.join(", ")}]`);
       }
