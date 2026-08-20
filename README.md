@@ -188,9 +188,30 @@ find. The **connector** supplies the tools the skill calls.
 ### Step 1 — Point the manifest at your tunnel
 
 The committed manifest ships a **placeholder** host, so the repo carries nobody's personal
-tunnel. Replace it before packaging, either way:
+tunnel. Supply the real URL one of three ways — the packager checks all of them, in this
+precedence order, and never rewrites the file on disk unless you edit it yourself.
 
-**Option A — edit the manifest.** In `cowork-plugin/manifest.json`, set `mcpServerUrl` to
+**Option A — let the VS Code launch do it (recommended).** Run the **Run with Dev Tunnel**
+profile. After the tunnel reports ready, the `resolve-tunnel-url` task queries
+`devtunnel show` and writes the live URL to `.tunnel-url` (git-ignored). Nothing else to do:
+
+```powershell
+npm run package:plugin
+npm run check:connector
+```
+
+Both pick the file up automatically and print `(from .tunnel-url)`. To refresh it without a
+debug session, run `npm run tunnel:url`.
+
+**Option B — pass it at build time**, which overrides `.tunnel-url`:
+
+```powershell
+$env:MCP_SERVER_URL = "https://<id>-3000.<region>.devtunnels.ms/mcp"
+npm run package:plugin
+npm run check:connector
+```
+
+**Option C — edit the manifest.** In `cowork-plugin/manifest.json`, set `mcpServerUrl` to
 your tunnel URL plus `/mcp`, and put the same host in `validDomains`:
 
 ```json
@@ -203,17 +224,8 @@ your tunnel URL plus `/mcp`, and put the same host in `validDomains`:
 }
 ```
 
-**Option B — pass it at build time** and leave the tracked file untouched (handy when your
-tunnel changes, or to keep `git status` clean):
-
-```powershell
-$env:MCP_SERVER_URL = "https://<id>-3000.<region>.devtunnels.ms/mcp"
-npm run package:plugin
-npm run check:connector
-```
-
-`MCP_SERVER_URL` rewrites `mcpServerUrl` **and** `validDomains` in the manifest copy written
-into the zip. The file on disk is never modified.
+Options A and B rewrite `mcpServerUrl` **and** `validDomains` in the manifest copy written
+into the zip. The tracked file keeps its placeholder, so `git status` stays clean.
 
 > Both hosts must agree. Cowork blocks requests to hosts the manifest does not declare, so a
 > `validDomains` mismatch produces a connector that installs cleanly and then never responds.
@@ -392,10 +404,12 @@ prefer interviewing you over opening the form.
 | `npm run build:icons` | Regenerates the Cowork package icons |
 | `npm run package:plugin` | Validates and zips the Cowork plugin → `dist/cowork-plugin.zip` |
 | `npm run check:connector` | Live conformance check against the manifest's `mcpServerUrl` |
+| `npm run tunnel:url` | Resolves the `expense-mcp` tunnel URL into `.tunnel-url` |
 
-`package:plugin` and `check:connector` both honour the `MCP_SERVER_URL` environment
-variable, which overrides the manifest's `mcpServerUrl` and `validDomains` without editing
-the tracked file. See [§7 Step 1](#step-1--point-the-manifest-at-your-tunnel).
+`package:plugin` and `check:connector` resolve the MCP server URL in this order:
+`MCP_SERVER_URL` → the git-ignored `.tunnel-url` file → whatever the manifest holds. The
+first two override `mcpServerUrl` and `validDomains` without touching the tracked file.
+See [§7 Step 1](#step-1--point-the-manifest-at-your-tunnel).
 
 ---
 

@@ -10,6 +10,7 @@
     "build:icons": "node scripts/build-icons.mjs",
     "package:plugin": "node scripts/build-icons.mjs && node scripts/package-plugin.mjs",
     "check:connector": "node scripts/check-connector.mjs",
+    "tunnel:url": "node scripts/resolve-tunnel-url.mjs",
     "start": "node dist/server.js"
   },
   "dependencies": {

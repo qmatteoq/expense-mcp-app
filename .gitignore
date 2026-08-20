@@ -7,6 +7,11 @@ dist/
 # Logs
 *.log
 
+# Local dev tunnel URL, written by `npm run tunnel:url` (and by the "Run with
+# Dev Tunnel" launch profile). Machine-specific, so it stays out of the repo —
+# this is what keeps the placeholder in cowork-plugin/manifest.json untouched.
+.tunnel-url
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db

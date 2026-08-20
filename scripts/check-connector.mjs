@@ -14,6 +14,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PLACEHOLDER, resolveServerUrl, HOW_TO_SET_URL } from "./tunnel-url.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PKG_DIR = join(ROOT, "cowork-plugin");
@@ -48,17 +49,17 @@ for (const connector of manifest.agentConnectors ?? []) {
   const remote = connector.toolSource?.remoteMcpServer;
   if (!remote) continue;
 
-  const url = process.env.MCP_SERVER_URL?.trim() || remote.mcpServerUrl;
-  if (url.includes("REPLACE-WITH-YOUR-TUNNEL")) {
+  const override = resolveServerUrl();
+  const url = override?.url || remote.mcpServerUrl;
+  if (url.includes(PLACEHOLDER)) {
     console.error(
-      `\n${connector.id}: mcpServerUrl is still the placeholder — nothing to check against.\n` +
-        `Edit cowork-plugin/manifest.json, or run:\n` +
-        `  MCP_SERVER_URL=https://<id>-3000.<region>.devtunnels.ms/mcp npm run check:connector`
+      `\n${connector.id}: no MCP server URL resolved — the manifest still holds the placeholder.\n` +
+        HOW_TO_SET_URL
     );
     failed = true;
     continue;
   }
-  console.log(`\n${connector.id} -> ${url}`);
+  console.log(`\n${connector.id} -> ${url}${override ? `  (from ${override.source})` : ""}`);
 
   const init = await rpc(url, {
     jsonrpc: "2.0",

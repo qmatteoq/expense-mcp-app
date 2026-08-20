@@ -14,6 +14,7 @@ import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, writeFileSy
 import { dirname, join, relative, posix, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateRawSync, crc32 as zlibCrc32 } from "node:zlib";
+import { PLACEHOLDER, parseHttpsUrl, resolveServerUrl, HOW_TO_SET_URL } from "./tunnel-url.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PKG_DIR = join(ROOT, "cowork-plugin");
@@ -79,33 +80,27 @@ const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
 /**
  * The committed manifest ships a placeholder host so the repo carries no one
- * developer's tunnel. Point it at your own server either by editing
- * manifest.json or, to leave the tracked file alone, by setting MCP_SERVER_URL:
- *
- *   MCP_SERVER_URL=https://<id>-3000.<region>.devtunnels.ms/mcp npm run package:plugin
+ * developer's tunnel. The real URL comes from MCP_SERVER_URL or the git-ignored
+ * .tunnel-url file (see scripts/tunnel-url.mjs for precedence).
  *
  * The override is applied to the manifest copy written into the zip only; the
  * file on disk is never rewritten.
  */
-const PLACEHOLDER = "REPLACE-WITH-YOUR-TUNNEL";
-const overrideUrl = process.env.MCP_SERVER_URL?.trim();
+const override = resolveServerUrl();
 
-if (overrideUrl) {
-  let host;
-  try {
-    const parsed = new URL(overrideUrl);
-    if (parsed.protocol !== "https:") throw new Error("not https");
-    host = parsed.host;
-  } catch {
-    fail(`MCP_SERVER_URL is '${overrideUrl}'. It must be an absolute HTTPS URL, e.g. https://example.devtunnels.ms/mcp.`);
+if (override) {
+  const parsed = parseHttpsUrl(override.url);
+  if (parsed.error) {
+    fail(
+      `The MCP server URL from ${override.source} is '${override.url}', but ${parsed.error}\n` +
+        `Expected something like https://<id>-3000.<region>.devtunnels.ms/mcp.`
+    );
   }
-  if (host) {
-    for (const c of manifest.agentConnectors ?? []) {
-      if (c.toolSource?.remoteMcpServer) c.toolSource.remoteMcpServer.mcpServerUrl = overrideUrl;
-    }
-    manifest.validDomains = [host];
-    console.log(`Using MCP_SERVER_URL override: ${overrideUrl}`);
+  for (const c of manifest.agentConnectors ?? []) {
+    if (c.toolSource?.remoteMcpServer) c.toolSource.remoteMcpServer.mcpServerUrl = override.url;
   }
+  manifest.validDomains = [parsed.host];
+  console.log(`Using MCP server URL from ${override.source}: ${override.url}`);
 }
 
 for (const field of ["manifestVersion", "version", "id", "developer", "name", "description", "icons", "accentColor"]) {
@@ -204,9 +199,8 @@ for (const c of connectors) {
     fail(`Connector '${c.id}': mcpServerUrl must be an HTTPS URL.`);
   } else if (remote.mcpServerUrl.includes(PLACEHOLDER)) {
     fail(
-      `Connector '${c.id}': mcpServerUrl is still the placeholder. Point it at your own server, ` +
-        `either by editing cowork-plugin/manifest.json or by re-running with ` +
-        `MCP_SERVER_URL=https://<id>-3000.<region>.devtunnels.ms/mcp.`
+      `Connector '${c.id}': mcpServerUrl is still the placeholder, so no real URL was resolved.\n` +
+        HOW_TO_SET_URL
     );
   } else {
     // Cowork blocks requests to hosts the manifest does not declare, so a
